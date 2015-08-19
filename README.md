@@ -17,12 +17,7 @@ executing. This required the loading of arguments into memory, loading the progr
 programs, as well as ensuring that the parent calling process would resume execution upon completion of the child
 process.
 
-The third project, contained in kvstore, required the implementation of two Key-Value storage systems. The first
-was a more straightforward distributed system, involving hashing and load balancing to ensure that each server
-in the cluster would receive proportially equal put and get requests, as well as ensuring that any communcation
-between those servers through socket servers was operational, as well as concurrent. The second system was built
-upon the first, maintaining all syncrohinzation and concurrency, as well as the dirstubuted load hashing, but also
-introduced Two Phase Committing and the ability to rebuild a crashed server from its log. Two Phase Committing ensures
+The third project, contained in kvstore, required the implementation of two Key-Value storage systems, mostly in kvstore/src/server. The first was a more straightforward distributed system, involving hashing and load balancing to ensure that each server in the cluster would receive proportially equal put and get requests, as well as ensuring that any communcation between those servers through socket servers was operational, as well as concurrent. The second system was built upon the first, maintaining all syncrohinzation and concurrency, as well as the dirstubuted load hashing, but also introduced Two Phase Committing and the ability to rebuild a crashed server from its log. Two Phase Committing ensures
 that all data is consistent across a distributed system by having a master server, in this case TPCMASTER, issue
 a request to vote to the other slave servers whenever a put request was issued. Then the slave servers would 
 issue their response to the request, and the TPCMASTER would only issue the final commit order to the slaves if
