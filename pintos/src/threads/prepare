@@ -1,0 +1,57 @@
+#!/usr/bin/env python
+
+import os
+import sys
+import shutil
+import re
+
+dir_prefix = "../tests/threads/"
+# During the normal semester, this is ch1
+#ch1_tests = ["alarm-single", "alarm-multiple", "alarm-simultaneous", "alarm-priority", "alarm-zero", "alarm-negative", "priority-change"]
+ch1_tests = ["alarm-single", "alarm-multiple", "alarm-simultaneous", "alarm-priority", "alarm-zero", "alarm-negative", "priority-change", "priority-donate-one", "priority-donate-multiple", "priority-donate-multiple2", "priority-donate-nest", "priority-donate-sema", "priority-donate-lower", "priority-fifo", "priority-preempt", "priority-sema", "priority-condvar", "priority-donate-chain"]
+ch2_tests = ["alarm-single", "alarm-multiple", "alarm-simultaneous", "alarm-priority", "alarm-zero", "alarm-negative", "priority-change", "priority-donate-one", "priority-donate-multiple", "priority-donate-multiple2", "priority-donate-nest", "priority-donate-sema", "priority-donate-lower", "priority-fifo", "priority-preempt", "priority-sema", "priority-condvar", "priority-donate-chain", "mlfqs-load-1", "mlfqs-load-60", "mlfqs-load-avg", "mlfqs-recent-1", "mlfqs-fair-2", "mlfqs-fair-20", "mlfqs-nice-2", "mlfqs-nice-10", "mlfqs-block"]
+
+
+
+
+
+
+Makefile = "Make.tests"
+
+if len(sys.argv) < 2:
+    print "Usage: ./prepare <option> [testdir]"
+    print "<option>  : Required Argument. possible values : 'ch1' or 'ch2'"
+    print "[testdir] : Optional Argument. location of test directory (src/tests/threads) relative to current dir"
+    print "                               default value - ../tests/threads"
+    exit()
+
+option = sys.argv[1].strip()
+if option != "ch1" and option != "ch2":
+    print "Wrong argument"
+    print "Usage: ./prepare <option> [testdir]"
+    print "<option>  : Required Argument. possible values : 'ch1' or 'ch2'"
+    print "[testdir] : Optional Argument. location of test directory (src/tests/threads) relative to current dir"
+    print "                               default value - ../tests/threads"
+    exit()
+
+if len(sys.argv) > 2:
+    dir_prefix = sys.argv[2].strip()
+    if dir_prefix[-1] != "/":
+        dir_prefix = dir_prefix + "/"
+    if not os.path.exists(dir_prefix + ch3_tests[0] + ".c"):
+        print "Could not find tests at given path %s" % (dir_prefix)
+        exit()
+
+if option == "ch1":
+    shutil.copy2(dir_prefix + Makefile + ".ch1", dir_prefix + Makefile)
+    shutil.copy2(dir_prefix + "tests.c.ch1", dir_prefix + "tests.c")
+    for test in ch1_tests:
+        shutil.copy2(dir_prefix + test + ".ck.ch1", dir_prefix + test + ".ck");
+
+if option == "ch2":
+    shutil.copy2(dir_prefix + Makefile + ".orig", dir_prefix + Makefile)
+    shutil.copy2(dir_prefix + "tests.c.orig", dir_prefix + "tests.c")
+    for test in ch2_tests:
+        shutil.copy2(dir_prefix + test + ".ck.orig", dir_prefix + test + ".ck");
+
+print "Set up tests for %s" % (option)

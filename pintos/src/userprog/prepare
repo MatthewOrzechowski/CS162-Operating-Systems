@@ -1,0 +1,55 @@
+#!/usr/bin/env python
+
+import os
+import sys
+import shutil
+import re
+
+dir_prefix = "../tests/userprog/"
+
+ch1_tests = ["iloveos", "exit", "null-test", "args-dbl-space", "args-many", "args-multiple", "args-none", "args-single"]
+tests = [ "wait-bad-pid" , "wait-killed", "wait-simple", "wait-twice", "exec-multiple", "exec-once", "exec-missing", "exec-bad-ptr", "halt", "exit"]
+
+Makefile = "Make.tests"
+
+def usage():
+    print "Usage: ./prepare <option> [testdir]"
+    print "<option>  : Required Argument. possible values : 'ch1' or 'ch2'"
+    print "[testdir] : Optional Argument. location of test directory (src/tests/userprog) relative to current dir"
+    print "                               default value - ../tests/userprog"
+
+if len(sys.argv) < 2:
+    usage()
+    exit()
+
+option = sys.argv[1].strip()
+if option != "ch1" and option != "ch2":
+    print "Wrong argument"
+    usage()
+    exit()
+
+if len(sys.argv) > 2:
+    dir_prefix = sys.argv[2].strip()
+    if dir_prefix[-1] != "/":
+        dir_prefix = dir_prefix + "/"
+    if not os.path.exists(dir_prefix + tests[0] + ".c"):
+        print "Could not find tests at given path %s" % (dir_prefix)
+        exit()
+
+if option == "ch1":
+    shutil.copy2(dir_prefix + Makefile + ".ch1", dir_prefix + Makefile)
+    shutil.copy2(dir_prefix + "../main.c.ch1", dir_prefix + "../main.c")
+    shutil.copy2(dir_prefix + "no-vm/" + Makefile + ".ch1", dir_prefix + "no-vm/" + Makefile)
+    shutil.copy2(dir_prefix + "../filesys/base/" + Makefile + ".ch1", dir_prefix + "../filesys/base/" + Makefile)
+    for test in ch1_tests:
+        shutil.copy2(dir_prefix + test + ".ck.ch1", dir_prefix + test + ".ck");
+
+if option == "ch2":
+    shutil.copy2(dir_prefix + Makefile + ".orig", dir_prefix + Makefile)
+    shutil.copy2(dir_prefix + "../main.c.orig", dir_prefix + "../main.c")
+    shutil.copy2(dir_prefix + "no-vm/" + Makefile + ".orig", dir_prefix + "no-vm/" + Makefile )
+    shutil.copy2(dir_prefix + "../filesys/base/" + Makefile + ".orig", dir_prefix + "../filesys/base/" + Makefile)
+    for test in tests:
+        shutil.copy2(dir_prefix + test + ".ck.orig", dir_prefix + test + ".ck");
+
+print "Set up tests for %s" % (option)
