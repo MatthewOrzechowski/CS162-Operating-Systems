@@ -9,7 +9,7 @@
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
 #include "filesys/directory.h"
-#include "filesys/file.h"
+#include "filesys/file.h" 
 #include "filesys/filesys.h"
 #include "threads/flags.h"
 #include "threads/init.h"
@@ -18,8 +18,9 @@
 #include "threads/synch.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-
-static struct semaphore temporary;
+#include "threads/malloc.h"
+#include "syscall.h"
+ 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
@@ -31,20 +32,45 @@ tid_t
 process_execute (const char *file_name) 
 {
   char *fn_copy;
+  char *fn_copy2;
   tid_t tid;
-
-  sema_init (&temporary, 0);
+ 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
+  fn_copy2 = palloc_get_page (0);
+  if (fn_copy2 == NULL)
+    return TID_ERROR;
+  strlcpy (fn_copy2, file_name, PGSIZE);
 
   /* Create a new thread to execute FILE_NAME. */
+  char * args;
+  file_name = strtok_r(fn_copy2, " ", &args);
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+  if (tid != TID_ERROR){
+    struct thread * t = thread_current();
+    struct thread * child = get_thread_by_tid(tid);
+    child->parent = t;
+    struct child_list_elem * c = malloc(sizeof(struct child_list_elem));
+    c->exit_status = -1;
+    c->tid = tid;
+    list_push_back(&t->children, &c->child_elem);
+    t->waitingOn = tid;
+    sema_up(&child->sema);
+    sema_down(&t->sema);
+    if(c->exited && c->exit_status == -1){
+      t->waitingOn = -1;
+      list_remove(&c->child_elem);
+      int status = c->exit_status;
+      free(c);
+      return status;
+    }
+  }
   return tid;
 }
 
@@ -56,19 +82,55 @@ start_process (void *file_name_)
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
-
+  char * args;
+  char * token = strtok_r(file_name, " ", &args);
+  
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
-
+  success = load (token, &if_.eip, &if_.esp);
+  
   /* If load failed, quit. */
+  if (!success){
+    palloc_free_page (file_name);
+    syscall_exit(-1);
+  }
+  
+  /* Add args to stack */
+  int argc = 0;
+  char ** argv = malloc(sizeof(char*) * 4096);
+  for (; token != NULL; token = strtok_r (NULL, " ", &args)){
+    if_.esp -= strlen(token) + 1;
+    memcpy(if_.esp, token, strlen(token));
+    argv[argc] = if_.esp;
+    argc++;
+  }
+  argv[argc] = NULL;
+    
+  while(((uint32_t) if_.esp)%4 != 0){
+    if_.esp -= 1;
+    *((uint8_t*) if_.esp) = (uint8_t) 0;
+  }
+  int i;
+  for (i = argc; i >= 0; i--){
+    if_.esp -= sizeof(char*);
+    memcpy(if_.esp, &argv[i], sizeof(char*));
+  }
+  if_.esp -= sizeof(char**);
+  *((char***) if_.esp) = if_.esp + sizeof(char**);
+  if_.esp -= sizeof(char**);
+  memcpy(if_.esp, &argc, sizeof(int));
+  if_.esp -= sizeof(void*);
+  memcpy(if_.esp, &argv[argc], sizeof(void*));
+  free(argv);
+  sema_down(&thread_current()->sema);
+  sema_up(&thread_current()->parent->sema);
+  thread_current()->parent->waitingOn = -1;
+  
   palloc_free_page (file_name);
-  if (!success) 
-    thread_exit ();
-
+   
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -85,14 +147,28 @@ start_process (void *file_name_)
    child of the calling process, or if process_wait() has already
    been successfully called for the given TID, returns -1
    immediately, without waiting.
-
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid) 
 {
-  sema_down (&temporary);
-  return 0;
+  struct list_elem *e;
+  struct thread * t = thread_current();
+  for (e = list_begin (&t->children); e != list_end (&t->children); e = list_next (e)){
+    struct child_list_elem *c = list_entry (e, struct child_list_elem, child_elem);
+    if (child_tid == c->tid){
+      if(!c->exited){
+        t->waitingOn = c->tid;
+        sema_down(&t->sema);
+      }
+      t->waitingOn = -1;
+      list_remove(e);
+      int status = c->exit_status;
+      free(c);
+      return status;
+    }
+  }
+  return -1;
 }
 
 /* Free the current process's resources. */
@@ -101,7 +177,7 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
-
+  
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
@@ -118,7 +194,6 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
-  sema_up (&temporary);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -233,6 +308,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
+    
+  file_deny_write(file);
+  t->file = file;
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -317,7 +395,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  //file_close(file);
   return success;
 }
 
@@ -373,15 +451,11 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
 /* Loads a segment starting at offset OFS in FILE at address
    UPAGE.  In total, READ_BYTES + ZERO_BYTES bytes of virtual
    memory are initialized, as follows:
-
         - READ_BYTES bytes at UPAGE must be read from FILE
           starting at offset OFS.
-
         - ZERO_BYTES bytes at UPAGE + READ_BYTES must be zeroed.
-
    The pages initialized by this function must be writable by the
    user process if WRITABLE is true, read-only otherwise.
-
    Return true if successful, false if a memory allocation error
    or disk read error occurs. */
 static bool
