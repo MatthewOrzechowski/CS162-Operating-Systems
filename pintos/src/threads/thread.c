@@ -1,4 +1,3 @@
-
 #include "threads/thread.h"
 #include <debug.h>
 #include <stddef.h>
@@ -645,3 +644,4 @@ uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
 
 /*check if threads are not being immediately prempted */
+
